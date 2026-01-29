@@ -1,0 +1,43 @@
+{% extends "captcha/base.html" %}
+
+{% block head %}
+<script src="https://www.google.com/recaptcha/api.js?render={{ sitekey }}"></script>
+{% endblock %}
+
+{% block title %}reCAPTCHA v3 Test{% endblock %}
+{% block header %}reCAPTCHA v3 Test{% endblock %}
+
+{% block info %}
+<p>This form demonstrates reCAPTCHA v3 (invisible, score-based).</p>
+<p><strong>Site Key:</strong> <code>{{ sitekey }}</code></p>
+<p>reCAPTCHA v3 runs invisibly and returns a score (0.0 to 1.0) indicating how likely the user is human.</p>
+{% if is_test_key %}
+<div class="warning">Using Google's test keys - verification will always succeed.</div>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<form id="captcha-form" method="post" action="{{ url_for('verify_captcha_recaptcha_v3') }}">
+    <div class="form-group">
+        <label>Name (optional):</label>
+        <input type="text" name="name" placeholder="Enter your name">
+    </div>
+
+    <input type="hidden" name="g-recaptcha-response" id="g-recaptcha-response">
+    <input type="hidden" name="sitekey" value="{{ sitekey }}">
+
+    <button type="submit">Submit</button>
+</form>
+
+<script>
+document.getElementById('captcha-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    grecaptcha.ready(function() {
+        grecaptcha.execute('{{ sitekey }}', {action: 'submit'}).then(function(token) {
+            document.getElementById('g-recaptcha-response').value = token;
+            document.getElementById('captcha-form').submit();
+        });
+    });
+});
+</script>
+{% endblock %}

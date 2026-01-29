@@ -1,0 +1,38 @@
+{% extends "captcha/base.html" %} {% block title %}Simple Image Captcha Test{%
+endblock %} {% block header %}Simple Image Captcha Test{% endblock %} {% block
+info %}
+<p>
+    This form demonstrates a local server-side captcha (no external service
+    required).
+</p>
+{% endblock %} {% block content %}
+<form method="post" action="{{ url_for('verify_captcha_simple') }}">
+    <div class="form-group">
+        <label>Name (optional):</label>
+        <input type="text" name="name" placeholder="Enter your name" />
+    </div>
+
+    <div class="form-group">
+        <label>Enter the text shown below:</label>
+        <img
+            src="{{ url_for('captcha_simple_image', token=token) }}"
+            alt="CAPTCHA"
+            style="display: block; margin: 10px 0; border: 1px solid #ccc"
+        />
+        <input
+            type="text"
+            name="captcha_response"
+            placeholder="Enter captcha text"
+            required
+            autocomplete="off"
+        />
+        <input type="hidden" name="token" value="{{ token }}" />
+    </div>
+
+    <button type="submit">Submit</button>
+
+    <p style="margin-top: 15px">
+        <a href="{{ url_for('view_captcha_simple') }}">Refresh captcha</a>
+    </p>
+</form>
+{% endblock %}

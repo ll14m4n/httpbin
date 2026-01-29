@@ -29,11 +29,23 @@ from flask import (
 from six.moves import range as xrange
 from werkzeug.datastructures import WWWAuthenticate, MultiDict
 from werkzeug.http import http_date
-from werkzeug.wrappers import BaseResponse
-from werkzeug.http import parse_authorization_header
+from werkzeug.wrappers import Response as BaseResponse
+from werkzeug.datastructures import Authorization
 from flasgger import Swagger, NO_SANITIZER
 
 from . import filters
+from .captcha import (
+    RECAPTCHA_V2_SITEKEY,
+    RECAPTCHA_V2_TEST_SITEKEY,
+    RECAPTCHA_V3_SITEKEY,
+    HCAPTCHA_SITEKEY,
+    HCAPTCHA_TEST_SITEKEY,
+    verify_recaptcha,
+    verify_hcaptcha,
+    generate_simple_captcha,
+    get_captcha_image,
+    verify_simple_captcha,
+)
 from .helpers import (
     get_headers,
     status_code,
@@ -138,6 +150,10 @@ template = {
         {
             "name": "Anything",
             "description": "Returns anything that is passed to request",
+        },
+        {
+            "name": "Captcha",
+            "description": "CAPTCHA testing endpoints for automation testing",
         },
     ],
 }
@@ -1139,7 +1155,7 @@ def digest_auth(
     authorization = request.headers.get("Authorization")
     credentials = None
     if authorization:
-        credentials = parse_authorization_header(authorization)
+        credentials = Authorization.from_header(authorization)
 
     if (
         not authorization
@@ -1775,6 +1791,306 @@ def a_json_endpoint():
                 },
             ],
         }
+    )
+
+
+# -----------
+# Captcha Routes
+# -----------
+
+
+@app.route("/captcha/recaptcha-v2")
+def view_captcha_recaptcha_v2():
+    """Returns a form with reCAPTCHA v2 checkbox.
+    ---
+    tags:
+      - Captcha
+    produces:
+      - text/html
+    parameters:
+      - in: query
+        name: sitekey
+        type: string
+        required: false
+        description: Custom site key (defaults to Google test key)
+    responses:
+      200:
+        description: HTML form with reCAPTCHA v2 widget.
+    """
+    sitekey = request.args.get("sitekey", RECAPTCHA_V2_SITEKEY)
+    is_test_key = sitekey == RECAPTCHA_V2_TEST_SITEKEY
+    return render_template(
+        "captcha/recaptcha-v2.html", sitekey=sitekey, is_test_key=is_test_key
+    )
+
+
+@app.route("/captcha/recaptcha-v2/verify", methods=["POST"])
+def verify_captcha_recaptcha_v2():
+    """Verifies reCAPTCHA v2 response.
+    ---
+    tags:
+      - Captcha
+    consumes:
+      - application/x-www-form-urlencoded
+    parameters:
+      - in: formData
+        name: g-recaptcha-response
+        type: string
+        required: true
+        description: The reCAPTCHA response token
+      - in: formData
+        name: secret
+        type: string
+        required: false
+        description: Custom secret key (defaults to test key)
+    produces:
+      - text/html
+      - application/json
+    responses:
+      200:
+        description: Verification result.
+    """
+    token = request.form.get("g-recaptcha-response", "")
+    secret = request.form.get("secret")
+
+    result = verify_recaptcha(token, secret=secret, version="v2")
+
+    # Return JSON if requested
+    if request.headers.get("Accept") == "application/json":
+        return jsonify(result)
+
+    form_data = {k: v for k, v in request.form.items() if k != "secret"}
+    return render_template(
+        "captcha/result.html",
+        captcha_type="reCAPTCHA v2",
+        result=result,
+        form_data=form_data,
+        back_url=url_for("view_captcha_recaptcha_v2"),
+    )
+
+
+@app.route("/captcha/recaptcha-v3")
+def view_captcha_recaptcha_v3():
+    """Returns a form with reCAPTCHA v3 (invisible).
+    ---
+    tags:
+      - Captcha
+    produces:
+      - text/html
+    parameters:
+      - in: query
+        name: sitekey
+        type: string
+        required: false
+        description: Custom site key (defaults to Google test key)
+    responses:
+      200:
+        description: HTML form with reCAPTCHA v3.
+    """
+    sitekey = request.args.get("sitekey", RECAPTCHA_V3_SITEKEY)
+    is_test_key = sitekey == RECAPTCHA_V2_TEST_SITEKEY
+    return render_template(
+        "captcha/recaptcha-v3.html", sitekey=sitekey, is_test_key=is_test_key
+    )
+
+
+@app.route("/captcha/recaptcha-v3/verify", methods=["POST"])
+def verify_captcha_recaptcha_v3():
+    """Verifies reCAPTCHA v3 response and returns score.
+    ---
+    tags:
+      - Captcha
+    consumes:
+      - application/x-www-form-urlencoded
+    parameters:
+      - in: formData
+        name: g-recaptcha-response
+        type: string
+        required: true
+        description: The reCAPTCHA response token
+      - in: formData
+        name: secret
+        type: string
+        required: false
+        description: Custom secret key (defaults to test key)
+    produces:
+      - text/html
+      - application/json
+    responses:
+      200:
+        description: Verification result with score.
+    """
+    token = request.form.get("g-recaptcha-response", "")
+    secret = request.form.get("secret")
+
+    result = verify_recaptcha(token, secret=secret, version="v3")
+
+    if request.headers.get("Accept") == "application/json":
+        return jsonify(result)
+
+    form_data = {k: v for k, v in request.form.items() if k != "secret"}
+    return render_template(
+        "captcha/result.html",
+        captcha_type="reCAPTCHA v3",
+        result=result,
+        form_data=form_data,
+        back_url=url_for("view_captcha_recaptcha_v3"),
+    )
+
+
+@app.route("/captcha/hcaptcha")
+def view_captcha_hcaptcha():
+    """Returns a form with hCaptcha.
+    ---
+    tags:
+      - Captcha
+    produces:
+      - text/html
+    parameters:
+      - in: query
+        name: sitekey
+        type: string
+        required: false
+        description: Custom site key (defaults to hCaptcha test key)
+    responses:
+      200:
+        description: HTML form with hCaptcha widget.
+    """
+    sitekey = request.args.get("sitekey", HCAPTCHA_SITEKEY)
+    is_test_key = sitekey == HCAPTCHA_TEST_SITEKEY
+    return render_template(
+        "captcha/hcaptcha.html", sitekey=sitekey, is_test_key=is_test_key
+    )
+
+
+@app.route("/captcha/hcaptcha/verify", methods=["POST"])
+def verify_captcha_hcaptcha():
+    """Verifies hCaptcha response.
+    ---
+    tags:
+      - Captcha
+    consumes:
+      - application/x-www-form-urlencoded
+    parameters:
+      - in: formData
+        name: h-captcha-response
+        type: string
+        required: true
+        description: The hCaptcha response token
+      - in: formData
+        name: secret
+        type: string
+        required: false
+        description: Custom secret key (defaults to test key)
+    produces:
+      - text/html
+      - application/json
+    responses:
+      200:
+        description: Verification result.
+    """
+    token = request.form.get("h-captcha-response", "")
+    secret = request.form.get("secret")
+
+    result = verify_hcaptcha(token, secret=secret)
+
+    if request.headers.get("Accept") == "application/json":
+        return jsonify(result)
+
+    form_data = {k: v for k, v in request.form.items() if k != "secret"}
+    return render_template(
+        "captcha/result.html",
+        captcha_type="hCaptcha",
+        result=result,
+        form_data=form_data,
+        back_url=url_for("view_captcha_hcaptcha"),
+    )
+
+
+@app.route("/captcha/simple")
+def view_captcha_simple():
+    """Returns a form with a locally-generated image captcha.
+    ---
+    tags:
+      - Captcha
+    produces:
+      - text/html
+    responses:
+      200:
+        description: HTML form with image captcha.
+    """
+    token, _ = generate_simple_captcha()
+    return render_template("captcha/simple.html", token=token)
+
+
+@app.route("/captcha/simple/image/<token>")
+def captcha_simple_image(token):
+    """Returns a captcha image for the given token.
+    ---
+    tags:
+      - Captcha
+    parameters:
+      - in: path
+        name: token
+        type: string
+        required: true
+    produces:
+      - image/png
+    responses:
+      200:
+        description: PNG captcha image.
+      404:
+        description: Invalid or expired token.
+    """
+    image_data = get_captcha_image(token)
+    if image_data is None:
+        abort(404)
+
+    return Response(image_data, headers={"Content-Type": "image/png"})
+
+
+@app.route("/captcha/simple/verify", methods=["POST"])
+def verify_captcha_simple():
+    """Verifies a simple image captcha response.
+    ---
+    tags:
+      - Captcha
+    consumes:
+      - application/x-www-form-urlencoded
+    parameters:
+      - in: formData
+        name: token
+        type: string
+        required: true
+        description: The captcha token
+      - in: formData
+        name: captcha_response
+        type: string
+        required: true
+        description: User's captcha answer
+    produces:
+      - text/html
+      - application/json
+    responses:
+      200:
+        description: Verification result.
+    """
+    token = request.form.get("token", "")
+    response = request.form.get("captcha_response", "")
+
+    success, message = verify_simple_captcha(token, response)
+    result = {"success": success, "message": message}
+
+    if request.headers.get("Accept") == "application/json":
+        return jsonify(result)
+
+    form_data = {k: v for k, v in request.form.items() if k != "token"}
+    return render_template(
+        "captcha/result.html",
+        captcha_type="Simple Image",
+        result=result,
+        form_data=form_data,
+        back_url=url_for("view_captcha_simple"),
     )
 
 

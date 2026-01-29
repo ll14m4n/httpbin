@@ -1,0 +1,24 @@
+{% extends "captcha/base.html" %} {% block head %}
+<script src="https://www.google.com/recaptcha/api.js" async defer></script>
+{% endblock %} {% block title %}reCAPTCHA v2 Test{% endblock %} {% block header
+%}reCAPTCHA v2 Test{% endblock %} {% block info %}
+<p>This form demonstrates reCAPTCHA v2.</p>
+<p><strong>Site Key:</strong> <code>{{ sitekey }}</code></p>
+{% if is_test_key %}
+<div class="warning">Using Google's test keys - captcha will always pass.</div>
+{% endif %} {% endblock %} {% block content %}
+<form method="post" action="{{ url_for('verify_captcha_recaptcha_v2') }}">
+    <div class="form-group">
+        <label>Name (optional):</label>
+        <input type="text" name="name" placeholder="Enter your name" />
+    </div>
+
+    <div class="form-group">
+        <div class="g-recaptcha" data-sitekey="{{ sitekey }}"></div>
+    </div>
+
+    <input type="hidden" name="sitekey" value="{{ sitekey }}" />
+
+    <button type="submit">Submit</button>
+</form>
+{% endblock %}

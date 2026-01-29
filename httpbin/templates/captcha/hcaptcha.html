@@ -1,0 +1,33 @@
+{% extends "captcha/base.html" %}
+
+{% block head %}
+<script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+{% endblock %}
+
+{% block title %}hCaptcha Test{% endblock %}
+{% block header %}hCaptcha Test{% endblock %}
+
+{% block info %}
+<p>This form demonstrates hCaptcha.</p>
+<p><strong>Site Key:</strong> <code>{{ sitekey }}</code></p>
+{% if is_test_key %}
+<div class="warning">Using hCaptcha test keys - captcha will always pass without challenge.</div>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<form method="post" action="{{ url_for('verify_captcha_hcaptcha') }}">
+    <div class="form-group">
+        <label>Name (optional):</label>
+        <input type="text" name="name" placeholder="Enter your name">
+    </div>
+
+    <div class="form-group">
+        <div class="h-captcha" data-sitekey="{{ sitekey }}"></div>
+    </div>
+
+    <input type="hidden" name="sitekey" value="{{ sitekey }}">
+
+    <button type="submit">Submit</button>
+</form>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "captcha/base.html" %}
+
+{% block title %}Captcha Verification Result{% endblock %}
+{% block header %}Captcha Verification Result{% endblock %}
+
+{% block info %}
+<p>Verification result for {{ captcha_type }} captcha.</p>
+{% endblock %}
+
+{% block content %}
+<div style="background: {{ '#d4edda' if result.success else '#f8d7da' }}; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
+    <h2 style="margin: 0;">{{ 'Success!' if result.success else 'Failed' }}</h2>
+</div>
+
+<h3>Verification Response</h3>
+<pre style="background: #f4f4f4; padding: 15px; overflow-x: auto; border-radius: 5px;">{{ result | tojson(indent=2) }}</pre>
+
+<h3>Form Data Received</h3>
+<pre style="background: #f4f4f4; padding: 15px; overflow-x: auto; border-radius: 5px;">{{ form_data | tojson(indent=2) }}</pre>
+
+<p><a href="{{ back_url }}">Try again</a></p>
+{% endblock %}
